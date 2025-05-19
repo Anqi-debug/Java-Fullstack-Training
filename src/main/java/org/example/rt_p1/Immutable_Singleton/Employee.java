@@ -1,4 +1,4 @@
-package org.example.rt_p1;
+package org.example.rt_p1.Immutable_Singleton;
 
 import java.util.List;
 

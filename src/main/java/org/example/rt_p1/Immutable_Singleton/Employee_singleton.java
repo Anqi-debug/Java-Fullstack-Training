@@ -1,5 +1,6 @@
-package org.example.rt_p1;
+package org.example.rt_p1.Immutable_Singleton;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Employee_singleton {
@@ -11,7 +12,7 @@ public class Employee_singleton {
     private List<Integer> list;
 
     // Step 1: Create the single static instance
-    private static final Employee_immutable INSTANCE = new Employee_immutable();
+    private static final Employee_immutable INSTANCE = new Employee_immutable("Smith", "John", "john.smith@example.com", 1234, false, new ArrayList<>());
 
     // Step 2: Make the constructor private
     private Employee_singleton() {
@@ -48,5 +49,4 @@ public class Employee_singleton {
         return list;
     }
 
-    // Optionally, you can add setters if the singleton is mutable (not recommended for global state)
 }
