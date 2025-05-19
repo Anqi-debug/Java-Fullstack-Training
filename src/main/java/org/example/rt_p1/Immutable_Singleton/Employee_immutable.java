@@ -1,4 +1,4 @@
-package org.example.rt_p1;
+package org.example.rt_p1.Immutable_Singleton;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -27,6 +27,9 @@ public final class Employee_immutable {
         // Create main employee with the subordinate list
         Employee_immutable manager = new Employee_immutable(
                 "Doe", "Jane", "jane.doe@example.com", 5678, true, subordinates);
+
+        int i=5;
+        Integer j = 2;
     }
 
     private final String lastName;
