@@ -25,7 +25,7 @@ public class Postgre {
     public static void main(String[] args) {
         String url = "jdbc:postgresql://localhost:5432/postgres";
         String user = "postgres";
-        String password = "PW"; // Replace with your actual password
+        String password = "Anqi218549"; // Replace with your actual password
 
         try {
             System.out.println("🚀 Trying to connect...");
