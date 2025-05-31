@@ -1,7 +1,5 @@
 package org.example.rt_p1.database;
-//JPA:
-//ORM:
-//Hibernate:
+
 import jakarta.persistence.*;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
@@ -24,12 +22,15 @@ public class Employee {
     @Id //Marks id as the primary key
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
-
     private String firstName;
     private String lastName;
     private String email;
     private String password;
     private Boolean flagged;
+
+    @ManyToOne(fetch = FetchType.EAGER) // or FetchType.EAGER
+    @JoinColumn(name = "department_id")// Foreign key column
+    private Department department;
 
     // Getters and setters
     public int getId() { return id; }
@@ -38,12 +39,15 @@ public class Employee {
     public String getEmail() { return email; }
     public String getPassword() { return password; }
     public Boolean getFlagged() { return flagged; }
+    public Department getDepartment() {return department;}
 
+    public void setId(int id) {this.id = id;}
     public void setFirstName(String firstName) { this.firstName = firstName; }
     public void setLastName(String lastName) { this.lastName = lastName; }
     public void setEmail(String email) { this.email = email; }
     public void setPassword(String password) { this.password = password; }
     public void setFlagged(Boolean flagged) { this.flagged = flagged; }
+    public void setDepartment(Department department) {this.department = department;}
 
     @Override
     public String toString() {
@@ -56,6 +60,22 @@ public class Employee {
                 ", flagged=" + flagged +
                 '}';
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Employee employee = (Employee) o;
+
+        return id == employee.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Integer.hashCode(id);
+    }
+
 
     // --- ADD ---
     public static void addEmployee(SessionFactory factory, Employee employee) {
@@ -107,7 +127,7 @@ public class Employee {
         session.close();
     }
 
-    // --- 1. SQL Injection Test Method ---
+    // --- SQL Injection Test Method ---
     public static void runSqlInjectionDemo(SessionFactory factory) {
         Session session = factory.openSession();
         try {
@@ -122,7 +142,7 @@ public class Employee {
         }
     }
 
-    // --- 2. PreparedStatement (safe version) ---
+    // --- PreparedStatement (safe version) ---
     public static void runPreparedStatementDemo(SessionFactory factory) {
         Session session = factory.openSession();
         try {
@@ -132,6 +152,7 @@ public class Employee {
             //Employee.class role, This query returns Employee objects — so return a List<Employee>. Defines expected return type of ORM-managed query
             //SELECT omitted.JPQL assumes the query starts with a select clause if not explicitly defined.
             Query<Employee> query = session.createQuery("FROM Employee WHERE email = :email", Employee.class);
+            //runtime error: IllegalArgumentException: Named parameter [email OR '1'='1'] not found in the query string
             query.setParameter("email", safeEmail);
             List<Employee> safeResult = query.getResultList();
             System.out.println("✅ Safe result size: " + safeResult.size());
@@ -140,7 +161,7 @@ public class Employee {
         }
     }
 
-    // --- 3. Transaction and Rollback ---
+    // --- Transaction and Rollback ---
     public static void runTransactionWithRollback(SessionFactory factory) {
         Session session = factory.openSession();
         Transaction tx = null;
@@ -171,6 +192,91 @@ public class Employee {
         }
     }
 
+    // --- Stored Procedure Demo ---
+    public static void storedProcedureDemo(SessionFactory factory, boolean flagStatus) {
+        Session session = factory.openSession();
+        Transaction tx = session.beginTransaction();
+
+        // PostgreSQL function call
+        List<Employee> employees = session
+                .createNativeQuery("SELECT * FROM get_employees(:flag)", Employee.class)
+                .setParameter("flag", flagStatus)
+                .getResultList();
+
+        System.out.println("📋 Employees with flagged = " + flagStatus);
+        employees.forEach(System.out::println);
+
+        tx.commit();
+        session.close();
+    }
+
+    //--- Trigger Demo ---
+    public static void showAuditLogs(SessionFactory factory) {
+        Session session = factory.openSession();
+        List<Object[]> logs = session.createNativeQuery("SELECT * FROM employee_audit").getResultList();
+        System.out.println("🕵️ Audit Logs:");
+        for (Object[] row : logs) {
+            System.out.println("ID: " + row[0] + ", EmployeeID: " + row[1] + ", Action: " + row[2] + ", Time: " + row[3]);
+        }
+        session.close();
+    }
+
+    public static void buffering(SessionFactory factory) {
+        Session session = factory.openSession();
+        //Same session, same ID
+        Employee e1 = session.get(Employee.class, 11); // DB query
+        Employee e2 = session.get(Employee.class, 11); // From buffer, no DB hit
+
+        System.out.println(e1 == e2); // true (same object reference)
+        session.close();
+    }
+
+    public static void buffering2(SessionFactory factory) {
+        //Different sessions, same ID
+        Session s1 = factory.openSession();
+        Employee e1 = s1.get(Employee.class, 11); // From DB or s1 cache
+        s1.close();
+
+        Session s2 = factory.openSession();
+        Employee e2 = s2.get(Employee.class, 11); // From DB or s2 cache
+        s2.close();
+
+        System.out.println(e1 == e2);      // false (different objects)
+        //System.out.println(e1.equals(e2)); // true (if equals is overridden)
+    }
+
+    public static void lazyLoadingDemo(SessionFactory factory) {
+        Session session = factory.openSession();
+
+        // Load employee only (department not yet fetched)
+        Employee emp = session.get(Employee.class, 11);
+        System.out.println("🔍 Employee loaded: " + emp.getFirstName());
+
+        System.out.println("📦 Accessing department...");
+        Department dept = emp.getDepartment(); // ❗ Triggers SQL query here
+        System.out.println("🏢 Department: " + dept.getName());
+
+        session.close(); // ❗ Must access department before this or get LazyInitializationException
+    }
+
+    public static void eagerLoadingDemo(SessionFactory factory) {
+        Session session = factory.openSession();
+
+        // Load employee + department in a JOIN
+        //load both Employee and its associated Department when the department field is annotated with in line 33
+
+        // SELECT * FROM EmployeeTable where employeeId=11;
+        Employee emp = session.get(Employee.class, 11);
+        System.out.println("🔍 Employee loaded: " + emp.getFirstName());
+
+
+        //
+        Department dept = emp.getDepartment(); // Already loaded
+        System.out.println("🏢 Department: " + dept.getName());
+
+        session.close();
+    }
+
     public static void main(String[] args) {
 
         Configuration config = new Configuration();
@@ -178,14 +284,20 @@ public class Employee {
         config.configure("hibernate.cfg.xml"); //
         SessionFactory factory = config.buildSessionFactory();
 
+        // --- Fetch Department (from DB) ---
+//        Session session = factory.openSession();
+//        Department dept = session.get(Department.class, 100);
+//        session.close();
+
         // --- Create / Add ---
-        Employee e1 = new Employee();
-        e1.setFirstName("Test");
-        e1.setLastName("User");
-        e1.setEmail("test.user@example.com");
-        e1.setPassword("123");
-        e1.setFlagged(true);
-        addEmployee(factory, e1);
+//        Employee e1 = new Employee();
+//        e1.setFirstName("Test12");
+//        e1.setLastName("User12");
+//        e1.setEmail("test12.user@example.com");
+//        e1.setPassword("123");
+//        e1.setFlagged(true);
+//        e1.setDepartment(dept);
+//      addEmployee(factory, e1);
 
 //        // --- Read ---
 //        Employee fetched = getEmployeeById(factory, e1.getId());
@@ -205,15 +317,16 @@ public class Employee {
 //        deleteEmployee(factory, e1.getId());
 //        System.out.println("After deletion:");
 //        listAllEmployees(factory);
-
-//        SessionFactory factory = new Configuration()
-//                .configure("hibernate.cfg.xml")
-//                .addAnnotatedClass(Employee.class)
-//                .buildSessionFactory();
 //
 //        Employee.runSqlInjectionDemo(factory);
 //        Employee.runPreparedStatementDemo(factory);
 //        Employee.runTransactionWithRollback(factory);
+//        Employee.storedProcedureDemo(factory, true);
+//        Employee.showAuditLogs(factory);
+//        Employee.buffering(factory);
+//        Employee.buffering2(factory);
+        Employee.eagerLoadingDemo(factory);
+//        Employee.lazyLoadingDemo(factory);
 
         factory.close();
     }
